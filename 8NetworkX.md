@@ -1,0 +1,244 @@
+# 発展的な解析手法2. NetworkXの使い方*
+
+NetworkXとはグラフ(ネットワーク)を扱うためのPythonのパッケージ(ライブラリ)である。これを用いることで、Fortranなどを使うととても手間のかかる処理を手軽に行えるようになることがある。この章では、グラフの基本、NetworkXの使い方の基礎、MDのデータ解析へのいくつかの応用について説明する。なお、この章はすべて発展的な内容である。核生成をテーマとしている人は必ず読むべきだが、それ以外の人は学習と研究がある程度進んだ段階で、参考として読めば良い。
+
+## グラフ
+この章で扱う"グラフ"とは、一般的な図表を意味するのではなく、グラフ理論が対象とするものに限られる。グラフ理論とは、物のつながりに関する様々な性質を探求する分野である。シミュレーションのデータ解析に利用するだけならその詳細な知識はおそらく必要ない(矢ケ崎は入門書を1冊斜め読みしただけである)。一つのグラフは、点(nodeないしはvertex)と、点の間を繋ぐ線(edge)からなる。Figure 14にグラフの例を示す。このグラフは0から9の10個のnodeからなる。この図では単純に数字でnodeを表しているが、必ずしもそうする必要はない。例えば、それぞれのnodeを都市の名前とすれば、グラフは交通網を表す図となる。一つのnodeが原子を表せば、分子をグラフで表すことができる。
+
+![Figure 14](images/image7-145.png)
+> Figure 14.  単純無向グラフの例。10個のnodeと13本のedgeからなる。
+
+Figure 14では、それぞれのedgeに向きが定義されていない。すなわち、0と1は互いに繋がっているが、0から1と1から0の間に区別はない。このようなグラフを無向グラフという。
+nodeを都市だとした場合、0から1へは通れるが、逆側には通行規制が敷かれて通れないという状態を考えることができる。この場合は、edgeを線ではなく矢印で表すほうがふさわしい。このようなグラフを有向グラフという。シミュレーションデータの解析の場合、大抵は無向グラフで十分だが、ice ruleのように水素結合の向きが重要になる問題では、有向グラフが必要になることもある。本章では無向グラフのみを扱うこととする。
+二つのnodeの間に複数のedge (multiple edge)がある状態を考えることもできる。また、一つのnodeから出た線が、他のnodeを通らずに同じnodeに戻るloopもありうる。Networkxはこれらも扱うことができるが、分子シミュレーションのデータ解析にはおそらく必要ないだろう。multiple edgeやloopを含まないグラフを単純グラフという。
+nodeに名前以外の属性を持たせることができる。edgeにも、重みやその他の属性をつけることができる。本章ではこれらは扱わないこととする。
+NetworkXの基本的な使い方
+Pythonの対話モードで、実際にNetworkXを使ってみる。すでに、PythonとNetworkXの両方がインストールされているものとする。まずはターミナルでPythonを起動する(この章ではPythonそのものについての解説は行わない)。
+```shell
+$ python
+```
+次に、以下を入力する。
+```python
+>>> import networkx as nx
+```
+これでNetworkXを使えるようになった。まず最初に空のグラフGを用意する。
+```python
+>>> G = nx.Graph()
+```
+このグラフにnodeやedgeを追加していくには、次のようにする。
+```python
+>>> G.add_node(7)
+>>> G.add_node("alpha")
+>>> G.add_edge(0,3)
+>>> G.add_edge("alpha",2)
+>>> G.add_edge(2,1)
+>>> G.add_edge(1,4)
+>>> G.add_edge(2,4)
+```
+nodeは数字でも文字列でも良い。edgeを定義すると、自動的にそれを構成するnodeもGに含まれる。定義したnodeやedgeを消去することもできる。
+```python
+>>> G.remove_node(2)
+>>> G.remove_edge(0,3)
+```
+グラフを完全に初期化するには以下のようにする。
+```python
+>>> G.clear()
+```
+リスト(配列)に含まれた複数のnodeやedgeをまとめて定義することもできる。
+```python
+>>> G.add_nodes_from([0,3,5])
+>>> G.add_edges_from([(0,1),(1,2),(9,1),(5,9),(3,4),(4,5),(4,"aaa")])
+```
+Matplotlibがインストールされていれば、グラフを図にすることができる。
+```python
+>>> import matplotlib.pyplot as plt
+>>> nx.draw(G,with_labels=True)
+>>> plt.show()
+```
+Figure 15のような図が表示されるはずである。
+
+![Figure 15](images/image6-147.png)
+> Figure 15. 数字と文字列が混在するグラフの例。
+
+NetworkXでは、グラフから様々な情報を抜き出すことができる。以下に簡単な例を示す。
+```python
+>>> G.nodes()
+>>> G.edges()
+>>> G.number_of_nodes()
+>>> G.number_of_edges()
+```
+上から、構成する全てのnodeのリスト、すべてのedgeのリスト、nodeの数、edgeの数が表示される。
+
+## 二面角を構成する粒子を抜き出す
+ここからは、具体的な応用例を示す。構造解析の基本の一つは、結合の定義であろう。<strike>これは、Fortranで容易に行うことができる。多くの場合、粒子間の距離を計算するだけでよい。
+```fortran
+do i=1,n-1
+  do j=i+1,n
+    ! ここでiとjの間の距離計算. 距離が一定値より短ければ結合とみなす.
+  enddo
+enddo
+```
+演算量が多くなるので、この処理にはPythonを使うべきではない。</strike>
+これにはpairlistモジュールが有用である。
+```python
+# 周期境界条件でない場合
+import pairlist as pl
+
+positions = # ノードの位置が格納された(N,3)のnp.array
+
+for i, j, d in pl.pairs_iter(positions, maxdist=1.0):
+    # ノードi, j間の距離dは1以下
+    ...
+```
+
+```python
+# 周期境界条件の場合は、第3引数でセルの形状を渡す(3x3 matrix)。また、positionsがfractional coordinate(セル相対座標)かどうかを指示する。
+for i, j, d in pl.pairs_iter(positions, 1.0, cell, fractional=False):
+    # ノードi, j間の距離dは1以下
+    ...
+```
+<strike>次に、結合角について考えてみよう。これは3点の相関なので、3重ループが現れる。
+
+これもFortranで簡単に計算できる。では、もう1点増えて二面角となったらどうだろうか。こうなると、途端にプログラムが複雑になる。この場合は、配列Aを、中心粒子の番号と、結合する相手の番号についての二次元配列にしなければならないだろう。また、iと結合している粒子の数も、なんらかの配列に納めなければならない。もちろん、ループは4重になる。書けないことはないが、かなり面倒である。(粒子数nの二次元の整数配列で結合情報を表すという手段もあるが、この配列のほとんどの成分が0となるので無駄が多い。系がある程度大きな場合は実用的でなくなる)</strike>
+
+NetworkXを利用すると、結合の情報のみから、繋がった4点の組み合わせの全てを容易に抜き出すことができる。以下はそれを行うプログラムの例である。この書き方だと、4点相関でありながら、ループは3重で済む。Fortranでは、どう書いたとしても、このサンプルよりはるかに長くなるだろう。
+> Source code 14 dihed.py
+```python
+#!/usr/bin/env python
+import networkx as nx
+
+G = nx.Graph()
+G.add_edges_from([(0,1),(0,2),(0,3),(0,4),(4,5)])
+
+for edge in G.edges():
+    neighbors =  G.neighbors(edge[0]) 
+    neighbors_0 = []
+    for node in neighbors:
+        if node != edge[1]:
+            neighbors_0.append(node)
+
+    neighbors =  G.neighbors(edge[1]) 
+    neighbors_1 = []
+    for node in neighbors:
+        if node != edge[0]:
+            neighbors_1.append(node)
+
+    if len(neighbors_0) == 0:
+        continue
+    if len(neighbors_1) == 0:
+        continue
+
+    for node_0 in neighbors_0:
+        for node_1 in neighbors_1:
+            print(node_0,edge[0],edge[1],node_1)
+            # 二面角の計算
+```
+<strike>前述のように、MDのトラジェクトリから結合を定義する部分にはPythonを使うべきではない。あらかじめFortranなどで求めておくべきである。このFortranの出力を読むようにサンプルの赤字の部分を書き換えれば良い。</strike>
+二面角の計算をPythonスクリプト内部で行うなら、原子座標のデータも読み込む必要がある。スクリプトで二面角を構成する4点の組み合わせを出力して、それを入力として他のプログラムで二面角を計算しても良い。
+
+## 閉じた環を探す
+水や氷の水素結合ネットワークには閉じた環が存在する。最も安定な水素結合ネットワークの環構造は6員環であり、実際に氷Ihの内部では全ての分子が6員環を形成している。液体中や氷VIなどの高圧氷、さらにはクラスレートハイドレートの中には、6員環以外の環構造が存在する。このような環構造を探すプログラムをFortranで書くのは難しい。ネットワークの中から、6員環以下のすべてのリングを探し出して表示するプログラムを示す。それなりに長いが、他の言語を使うともっと恐ろしいことになる。赤字で示したnx.all_simple_pathsのおかげで、非常に楽になっている。また、pythonの集合のデータ型(set)やforの仕様にもかなり助けられている。
+
+> Source code 15 cycle.py
+```python
+#!/usr/bin/env python
+
+import networkx as nx
+
+G = nx.Graph()
+G.add_edges_from([(0,1),(1,2),(2,3),(3,4),(4,1),(0,5),(5,7),(7,8),(8,4),(5,8)])
+
+max_ring_size = 6
+# Count the number of 2,3,4,...,max_ring_size-membered rings.
+all_rings = []
+for node in G:
+    for neighbor in G.neighbors(node):
+        if node < neighbor:
+            paths = nx.all_simple_paths(G, source=node,  \
+                    target=neighbor, cutoff=max_ring_size-1)
+            for path in paths:
+                path.sort()
+                all_rings.append(path)
+
+# Remove overlap.
+uniq_all_rings_0 = []
+for path in all_rings:
+    if not path in uniq_all_rings_0:
+        uniq_all_rings_0.append(path)
+
+# Remove paths of len(path) == 2 because they are not "rings" but edges.
+uniq_all_rings_1 = []
+for path in uniq_all_rings_0:
+    length = len(path)
+    if length > 2:
+        uniq_all_rings_1.append(path)
+
+# Romove rings that completely include other ring(s).
+tobe_removed = []
+for ring_i in uniq_all_rings_1:
+    n_size_i = len(ring_i)
+    set_i = set(ring_i)
+    j = 0
+    for ring_j in uniq_all_rings_1:
+        n_size_j = len(ring_j)
+        if n_size_i < n_size_j:
+            set_j = set(ring_j)
+            and_set = set_i&set_j
+            num_overlap = len(list(and_set))
+            if num_overlap == n_size_i:
+                tobe_removed.append(j)
+        j = j + 1
+```
+
+環を数えるアルゴリズムは、`cycless`モジュールで提供されている。これを用いると、環の探索は次のように簡潔に書ける。
+
+```python
+from cycless import cycles
+
+g = nx.Graph()
+# グラフgの中身をここで定義
+...
+
+for cycle in cycles.cycles_iter(g, 6):
+    # cycleには6員環以下の環のノードのラベルが列挙される。
+    ...
+```
+
+# クラスターの数と構成要素
+過冷却溶液における結晶の均一核生成を考えよう。この過程では、液体の中で小さな結晶のクラスターが現れては消えていく。そのうち、少数のクラスターが臨界サイズを超え、消えることなく成長していく。過飽和蒸気における液滴の生成や、過飽和水溶液からの溶質結晶の析出なども同様の現象である。このような核生成過程の解析では、ある瞬間構造の中にクラスターは何個あるのか、それらのサイズはどの程度なのか、といった量が必要となる。
+ある粒子がクラスターを構成する一員か否かは判定できているとしよう。液滴の場合なら全ての粒子がそうであるし、結晶生成なら動きの遅い粒子やポテンシャルの低い粒子がそうである。また、これらの粒子の間の結合も粒子間距離などから定義できるとしよう。グラフを使わずに、これらの情報からクラスターを定義することもできるが、力技のコードでは効率が悪く、また可読性も低くなる。
+NetworkXを利用すると以下のようになる。このサンプルでは、粒子数が3より大きなクラスターの数、並びにそれらのサイズが出力される。このスクリプトでポイントとなるのは、赤字で示したnx.connected_components(G)である。これはグラフ内のすべてのクラスターの要素のリストを返してくれるメソッドである。
+
+> Source code 16 cluster.py
+```python
+Source code 16 cluster.py
+#!/usr/bin/env python
+
+import networkx as nx
+
+G = nx.Graph()
+G.add_edges_from([(0,1),(1,2),(3,4),(4,5),(5,6),(6,3),(7,8)])
+G.add_nodes_from([9,10])
+
+n_cluster_size_threshold = 2
+
+# Generate connected components (i.e., clusters)
+all_components = []
+for component  in nx.connected_components(G):
+    tmp_nodes = []
+    for node in component:
+        tmp_nodes.append(int(node))
+    tmp_nodes.sort()
+    if len(tmp_nodes) > n_cluster_size_threshold:
+        all_components.append(tmp_nodes)
+
+# Sort so that larger component becomes earlier
+all_components.sort(key = lambda x:len(x), reverse = True)
+
+n_components = len(all_components)
+print("number of clusters:",n_components)
+print("cluster size: ",end='')
+for component in all_components:
+    print(len(component),end=' ')
+print()
+```
