@@ -15,7 +15,7 @@ nodeに名前以外の属性を持たせることができる。edgeにも、重
 NetworkXの基本的な使い方
 Pythonの対話モードで、実際にNetworkXを使ってみる。すでに、PythonとNetworkXの両方がインストールされているものとする。まずはターミナルでPythonを起動する(この章ではPythonそのものについての解説は行わない)。
 ```shell
-$ python
+python
 ```
 次に、以下を入力する。
 ```python
