@@ -1,0 +1,13 @@
+# 生成物
+combined.md
+
+# ツール設定
+.crossnote/
+.DS_Store
+
+# 元のドキュメント
+*.pages/
+
+# Python環境
+Pipfile.lock
+__pycache__/
