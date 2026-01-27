@@ -11,27 +11,7 @@ GROMACS のテキスト形式の座標データ`.gro`の中身の構造につい
 > **Source code 4.1** read_gro.py
 
 ```python
-#!/usr/bin/env python
-
-import sys
-
-title  = sys.stdin.readline()
-n_atom = int(sys.stdin.readline())
-for i in range(n_atom):
-    line = sys.stdin.readline()
-    residue_id = int(line[0:5])
-    residue    = line[5:10].strip()
-    atom       = line[10:15].strip()
-    atom_id    = int(line[15:20])
-    x          = float(line[20:28])
-    y          = float(line[28:36])
-    z          = float(line[36:44])
-    # 速度は省略
-    print(f"{atom_id} {x} {y} {z}")
-
-cell = [float(x) for x in sys.stdin.readline().split()]
-print(cell)
-strip()関数は，文字列の先頭と末尾の空白をとりのぞく．
+{% include "codes/read_gro.py" %}
 ```
 
 このプログラムを、`read_gro.py`という名前で保存し、そのまま実行できるように、実行パーミッションを設定する。
@@ -67,7 +47,17 @@ python3 read_gro.py < 00003.gro
 > **Source code 4.2** read_gro2.py
 
 ```python
-{{ include codes/read_gro3.py }}
+{% include "codes/read_gro2.py" %}
+```
+
+このように関数を定義しておくと、再利用がしやすくなる。
+
+実際には、1 つの`gro`ファイルに何フレームかの座標データが連続して入っている場合がある。あらかじめいくつのフレームが含まれているかがわかっていれば、その数だけ読みこみを繰りかえせば良い。しかし、データ数がわかっていない場合もありえるので、データの終わりが来るまで繰りかえすようにプログラムを書いておくのが親切である。このために、上のプログラムをすこしだけ書きかえる。
+
+> **Source code 4.3** read_gro3.py
+
+```python
+{% include "codes/read_gro3.py" %}
 ```
 
 ## gromacs 形式で書き出す

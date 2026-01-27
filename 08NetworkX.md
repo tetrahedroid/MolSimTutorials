@@ -165,7 +165,56 @@ for edge in G.edges():
 > **Source code 8.2** cycle.py
 
 ```python
-{{ include codes/cycle.py }}
+#!/usr/bin/env python
+
+import networkx as nx
+
+G = nx.Graph()
+G.add_edges_from(
+    [(0, 1), (1, 2), (2, 3), (3, 4), (4, 1), (0, 5), (5, 7), (7, 8), (8, 4), (5, 8)]
+)
+
+max_ring_size = 6
+# Count the number of 2,3,4,...,max_ring_size-membered rings.
+all_rings = []
+for node in G:
+    for neighbor in G.neighbors(node):
+        if node < neighbor:
+            paths = nx.all_simple_paths(
+                G, source=node, target=neighbor, cutoff=max_ring_size - 1
+            )
+            for path in paths:
+                path.sort()
+                all_rings.append(path)
+
+# Remove overlap.
+uniq_all_rings_0 = []
+for path in all_rings:
+    if not path in uniq_all_rings_0:
+        uniq_all_rings_0.append(path)
+
+# Remove paths of len(path) == 2 because they are not "rings" but edges.
+uniq_all_rings_1 = []
+for path in uniq_all_rings_0:
+    length = len(path)
+    if length > 2:
+        uniq_all_rings_1.append(path)
+
+# Romove rings that completely include other ring(s).
+tobe_removed = []
+for ring_i in uniq_all_rings_1:
+    n_size_i = len(ring_i)
+    set_i = set(ring_i)
+    j = 0
+    for ring_j in uniq_all_rings_1:
+        n_size_j = len(ring_j)
+        if n_size_i < n_size_j:
+            set_j = set(ring_j)
+            and_set = set_i & set_j
+            num_overlap = len(list(and_set))
+            if num_overlap == n_size_i:
+                tobe_removed.append(j)
+        j = j + 1
 ```
 
 環を数えるアルゴリズムは、`cycless`モジュールで提供されている。これを用いると、環の探索は次のように簡潔に書ける。
@@ -187,7 +236,53 @@ for cycle in cycles.cycles_iter(g, 6):
 > **Source code 8.3** ring_analysis.py
 
 ```python
-{{ include codes/ring_analysis.py }}
+#!/usr/bin/env python
+# groファイルを読みこみ、HBをつないでリングの統計をとる。
+# この部分はMolSimTutorialsからそのままもってきた
+
+from codes.read_gro3 import read_gro
+
+import networkx as nx
+
+# 松本作: 周期境界条件のもとで近接点対をリストする
+import pairlist as pl
+
+# 松本作: グラフの中にサイクルをさがす
+from cycless import cycles
+
+for frame in read_gro(sys.stdin):
+    # シミュレーションセル
+    cell = frame["cell"]
+
+    # シミュレーションセルの逆行列
+    celli = np.linalg.inv(cell)
+
+    # 酸素原子の座標
+    oxygens = frame["position"][frame["atom"] == "OW", :]
+    # 水素原子1の座標
+    hydrogens1 = frame["position"][frame["atom"] == "HW1", :]
+    # 水素原子2の座標
+    hydrogens2 = frame["position"][frame["atom"] == "HW1", :]
+    # 酸素原子の座標をセルの逆行列をかけてfractional coordinateに変換
+    rO = oxygens @ celli
+    # 水素原子1の座標をセルの逆行列をかけてfractional coordinateに変換
+    rH1 = hydrogens1 @ celli
+    # 水素原子2の座標をセルの逆行列をかけてfractional coordinateに変換
+    rH2 = hydrogens2 @ celli
+
+    # グラフを作成
+    g = nx.Graph()
+    # 酸素原子と水素原子1の距離が0.245以下の場合
+    for o, h1, d in pl.pairs_iter(rO, 0.245, cell, pos2=rH1):
+        # 距離が0.1以下の場合は、グラフに追加しない(共有結合)
+        if d > 0.1:
+            g.add_edge(o, h1)
+    for o, h2, d in pl.pairs_iter(rO, 0.245, cell, pos2=rH2):
+        if d > 0.1:
+            g.add_edge(o, h2)
+    for cycle in cycles.cycles_iter(g, 10):
+        # 環のサイズが10以下の場合は、環のサイズを出力
+        print(len(cycle))
 ```
 
 ## クラスターの数と構成要素
@@ -231,4 +326,3 @@ for component in all_components:
     print(len(component),end=' ')
 print()
 ```
-
