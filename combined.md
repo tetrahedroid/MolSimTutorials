@@ -4,7 +4,7 @@
 
 <h2>分子シミュレーション研究の手引き</h2>
 
-2022 年 8 月 2 日
+2026 年 1 月 28 日
 
 矢ケ崎琢磨
 
@@ -14,6 +14,7 @@
 
 ## バージョン情報(大きな変更のみ)
 
+- Jan, 28, 2026. コードの分離。Jupyterの自動生成。
 - Dec. 1, 2023. MarkDown に書換え。VSCode 上で閲覧する前提。
 - Aug. 2, 2022. 現行のシステムにあわせた変更、および Python 化。
 - Apr. 25, 2019. p. 31 に Load meter についての記述を追加。
@@ -1670,10 +1671,10 @@ for frame in read_gro(sys.stdin):
     cell = frame["cell"]
     positions = frame["position"]
     atoms = frame["atom"]
-    oxygens = positions[atoms=="OW"]
+    oxygens = positions[atoms == "OW"]
     celli = np.linalg.inv(cell)
     d = (oxygens - oxygens[0]) @ celli
-    d -= np.floor(d+0.5)
+    d -= np.floor(d + 0.5)
     L = np.linalg.norm(d @ cell, axis=1)
     for r in L:
         print(r)
@@ -1695,12 +1696,12 @@ for frame in read_gro(sys.stdin):
     cell = frame["cell"]
     positions = frame["position"]
     atoms = frame["atom"]
-    oxygens = positions[atoms=="OW"]
+    oxygens = positions[atoms == "OW"]
     celli = np.linalg.inv(cell)
     d = (oxygens - oxygens[0]) @ celli
-    d -= np.floor(d+0.5)
+    d -= np.floor(d + 0.5)
     L = np.linalg.norm(d @ cell, axis=1)
-    print(np.min(L[L>0]), np.argmin(L[L>0]))
+    print(np.min(L[L > 0]), np.argmin(L[L > 0]))
 ```
 
 fancy index を使って、距離 0 の要素を除外している。(そうしないと、原子 0 から一番近い原子は 0 自身で、その距離は 0 となってしまう)また、`numpy.argmin`は、最小値の代わりに、最小値となる配列要素の番号を返す。(最初の酸素が 0 番)
@@ -1758,6 +1759,64 @@ python3 nearest2.py < 00006-0.gro > out.gro
 ### 課題 1
 
 `nearest2.py`は最初の酸素原子と，それに一番近い酸素原子だけを抽出する．これを，任意の酸素原子と，それに近い順に 4 番目までの酸素原子を抽出するように書きかえよ．(作例あり)
+
+## 局所体積
+
+数密度はある体積に含まれる分子や原子の数を、体積で割ったもので、その逆数は1つの原子や分子が占める空間の平均的な大きさを表す。
+
+それぞれの分子が占める空間をうまく切りわけてやることができれば、究極的には1分子が占める体積が計算でき、その逆数は1分子の密度となる。
+
+このような分子単位の物理量が計算できると、相転移などの巨視的な現象を微視的に理解する手助けとなる。
+
+以下のコードでは、`.gro`ファイルから水の酸素原子位置を読みこみ、空間をVoronoi分割してそれぞれの水分子が占める体積を直接計算する。
+
+Voronoi分割を行うpythonモジュールは以下のようにインストールしておく。
+
+```shell
+pip install git+https://github.com/vitroid/pyvoro.git
+```
+
+> **Source code 4.6** voronoi.py
+
+```python
+import sys
+import numpy as np
+import pyvoro
+from codes.read_gro3 import read_gro
+from codes.utils import is_diagonal
+
+
+for frame in read_gro(sys.stdin):
+    # シミュレーションセル（対角行列を仮定）
+    box = frame["cell"]
+    assert is_diagonal(box), "シミュレーションセルは直方体である必要があります"
+
+    # 酸素原子の座標
+    oxygens = frame["position"][frame["atom"] == "OW", :]
+
+    # 直方体セルのサイズ
+    Lx, Ly, Lz = box[0, 0], box[1, 1], box[2, 2]
+
+    # pyvoro による周期 Voronoi 解析
+    # limits: 各次元の最小値と最大値
+    # dispersion: ブロックサイズ（隣接する可能性のある点間の最大距離）
+    # periodic: 各次元の周期性
+    cells = pyvoro.compute_voronoi(
+        oxygens.tolist(),
+        limits=[[0, Lx], [0, Ly], [0, Lz]],
+        dispersion=max(Lx, Ly, Lz) / 3.0,  # 適切なブロックサイズ
+        periodic=[True, True, True],
+    )
+
+    # 各 Voronoi セルの面数と体積を出力
+    for i, cell in enumerate(cells):
+        nfaces = len(cell["faces"])
+        volume = cell["volume"]
+        print(f"Cell {i} has {nfaces} faces and a volume of {volume}")
+```
+
+
+
 
 ## yaplot を使う\*
 
