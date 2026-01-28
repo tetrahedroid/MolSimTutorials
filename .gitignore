@@ -14,3 +14,7 @@ __pycache__/
 Icon*
 combined.ipynb
 分子シミュレーション研究の手引き-2022-10-20mm.pages.pkgf
+
+# Poetry
+# poetry.lock  # 通常はコミットしますが、必要に応じてコメントアウトを解除
+poetry.lock

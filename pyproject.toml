@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "molsim-tutorials"
+version = "0.1.0"
+description = "分子シミュレーション研究の手引き"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+jinja2 = "*"
+pyvoro3 = {path = "/Users/matto/Dropbox/gitbox/pyvoro"}
+
+[tool.poetry.group.dev.dependencies]
+pdoc = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
